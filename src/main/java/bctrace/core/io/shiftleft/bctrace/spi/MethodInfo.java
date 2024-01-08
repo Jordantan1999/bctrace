@@ -24,9 +24,10 @@
  */
 package bctrace.core.io.shiftleft.bctrace.spi;
 
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodNode;
+
 import bctrace.core.io.shiftleft.bctrace.asm.util.ASMUtils;
-import bctrace.core.org.objectweb.asm.tree.ClassNode;
-import bctrace.core.org.objectweb.asm.tree.MethodNode;
 
 /**
  *
@@ -122,10 +123,7 @@ public final class MethodInfo {
     if (this == obj) {
       return true;
     }
-    if (obj == null) {
-      return false;
-    }
-    if (getClass() != obj.getClass()) {
+    if ((obj == null) || (getClass() != obj.getClass())) {
       return false;
     }
     final MethodInfo other = (MethodInfo) obj;

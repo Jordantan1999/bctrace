@@ -20,6 +20,8 @@ dependencies {
     // This dependency is used by the application.
     implementation 'com.google.guava:guava:32.1.1-jre'
 	implementation 'org.ow2.asm:asm:9.6'
+	implementation 'org.ow2.asm:asm-tree:9.6'
+	implementation 'org.ow2.asm:asm-util:9.6'
 	implementation 'io.shiftleft:bctrace-runtime:4.0.0'
 }
 

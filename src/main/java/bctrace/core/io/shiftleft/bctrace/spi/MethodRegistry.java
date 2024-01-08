@@ -36,8 +36,8 @@ public final class MethodRegistry {
 
   private static final MethodRegistry INSTANCE = new MethodRegistry();
 
-  private final ArrayList<MethodInfo> methodArray = new ArrayList<MethodInfo>();
-  private final Map<MethodInfo, Integer> methodMap = new HashMap<MethodInfo, Integer>();
+  private final ArrayList<MethodInfo> methodArray = new ArrayList<>();
+  private final Map<MethodInfo, Integer> methodMap = new HashMap<>();
 
   public static MethodRegistry getInstance() {
     return INSTANCE;

@@ -43,7 +43,7 @@ public abstract class AgentLoggerFactory {
   static {
     ServiceLoader<AgentLoggerFactory> sl = ServiceLoader.load(AgentLoggerFactory.class, AgentLoggerFactory.class.getClassLoader());
     Iterator<AgentLoggerFactory> it = sl.iterator();
-    List<AgentLoggerFactory> instances = new ArrayList<AgentLoggerFactory>();
+    List<AgentLoggerFactory> instances = new ArrayList<>();
     while (it.hasNext()) {
       instances.add(it.next());
     }

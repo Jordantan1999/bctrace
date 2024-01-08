@@ -39,10 +39,10 @@ package bctrace.core.io.shiftleft.bctrace.asm;
 import java.io.IOException;
 import java.io.InputStream;
 
-import bctrace.core.org.objectweb.asm.ClassReader;
-import bctrace.core.org.objectweb.asm.ClassWriter;
-import bctrace.core.org.objectweb.asm.Opcodes;
-import bctrace.core.org.objectweb.asm.Type;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 
 /**
  * A {@link ClassWriter} that looks for static class data in the classpath when
@@ -58,7 +58,7 @@ import bctrace.core.org.objectweb.asm.Type;
  *
  * <p>
  * This class was heavily influenced by ASM's
- * bctrace.core.org.objectweb.asm.util.ClassWriterComputeFramesTest, which contains the same
+ * org.objectweb.asm.util.ClassWriterComputeFramesTest, which contains the same
  * logic in a subclass. The code here has been slightly cleaned up for
  * readability.
  *

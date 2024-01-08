@@ -24,12 +24,14 @@
  */
 package bctrace.core.io.shiftleft.bctrace.spi;
 
-import bctrace.core.io.shiftleft.bctrace.asm.util.ClassInfoCache;
 import java.io.IOException;
-import java.io.InputStream; 
+import java.io.InputStream;
 import java.util.List;
-import bctrace.core.org.objectweb.asm.ClassReader;
-import bctrace.core.org.objectweb.asm.tree.ClassNode;
+
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.ClassNode;
+
+import bctrace.core.io.shiftleft.bctrace.asm.util.ClassInfoCache;
 
 /**
  *

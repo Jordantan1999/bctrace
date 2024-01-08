@@ -24,16 +24,15 @@
  */
 package bctrace.core.io.shiftleft.bctrace.impl;
 
-import bctrace.core.io.shiftleft.bctrace.asm.TransformationSupport;
-
-import bctrace.core.io.shiftleft.bctrace.spi.Instrumentation;
-import bctrace.runtime.io.shiftleft.bctrace.runtime.DebugInfo;
-
 import java.lang.instrument.UnmodifiableClassException;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+
+import bctrace.core.io.shiftleft.bctrace.asm.TransformationSupport;
+import bctrace.core.io.shiftleft.bctrace.spi.Instrumentation;
+import bctrace.runtime.io.shiftleft.bctrace.runtime.DebugInfo;
 
 /**
  * Single implementation of the {@link Instrumentation Instrumentation}
@@ -44,7 +43,7 @@ import java.util.Set;
 public final class InstrumentationImpl implements Instrumentation {
 
   private final java.lang.instrument.Instrumentation javaInstrumentation;
-  private final Set<String> transformedClassNames = new HashSet<String>();
+  private final Set<String> transformedClassNames = new HashSet<>();
 
   private boolean stale = true;
   private Class[] transformedClasses;
@@ -75,7 +74,7 @@ public final class InstrumentationImpl implements Instrumentation {
   @Override
   public Class[] getTransformedClasses() {
     if (stale) {
-      List<Class> list = new LinkedList<Class>();
+      List<Class> list = new LinkedList<>();
       Class[] loaded = getAllLoadedClasses();
       for (Class clazz : loaded) {
         if (transformedClassNames.contains(clazz.getName())) {

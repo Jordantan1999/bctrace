@@ -25,8 +25,9 @@
 package bctrace.core.io.shiftleft.bctrace.spi;
 
 import java.security.ProtectionDomain;
-import bctrace.core.org.objectweb.asm.tree.ClassNode;
-import bctrace.core.org.objectweb.asm.tree.MethodNode;
+
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodNode;
 
 /**
  * A filter determines which classes and methods are instrumented.

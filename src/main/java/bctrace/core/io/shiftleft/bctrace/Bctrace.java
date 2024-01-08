@@ -12,7 +12,7 @@
  * Confidentiality and Non-disclosure agreements explicitly covering such access.
  *
  * The copyright notice above does not evidence any actual or intended publication or disclosure
- * of this source code, which includeas information that is confidential and/or proprietary, and
+ * of this source code, which includes information that is confidential and/or proprietary, and
  * is a trade secret, of ShiftLeft, Inc.
  *
  * ANY REPRODUCTION, MODIFICATION, DISTRIBUTION, PUBLIC PERFORMANCE, OR PUBLIC DISPLAY
@@ -24,18 +24,18 @@
  */
 package bctrace.core.io.shiftleft.bctrace;
 
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
+import java.net.URL;
+import bctrace.core.io.shiftleft.bctrace.asm.CallbackTransformer;
 import bctrace.core.io.shiftleft.bctrace.asm.Transformer;
-import bctrace.core.io.shiftleft.bctrace.impl.InstrumentationImpl;
-import bctrace.core.io.shiftleft.bctrace.spi.AgentLoggerFactory;
-import bctrace.core.io.shiftleft.bctrace.spi.Hook;
-import bctrace.core.io.shiftleft.bctrace.spi.Instrumentation;
-import bctrace.core.io.shiftleft.bctrace.spi.SystemProperty;
+import bctrace.core.io.shiftleft.bctrace.hook.Hook;
+import bctrace.core.io.shiftleft.bctrace.jmx.CallCounterHook;
 import bctrace.runtime.io.shiftleft.bctrace.runtime.Callback;
-import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.Listener;
+import bctrace.runtime.io.shiftleft.bctrace.runtime.Callback.ErrorListener;
+import bctrace.runtime.io.shiftleft.bctrace.runtime.CallbackEnabler;
+import bctrace.spi.io.shiftleft.bctrace.SystemProperty;
+import bctrace.spi.io.shiftleft.bctrace.logging.AgentLoggerFactory;
+import bctrace.spi.io.shiftleft.bctrace.logging.Level;
+import bctrace.spi.io.shiftleft.bctrace.logging.Logger;
 
 /**
  * Framework entry point.
@@ -44,76 +44,107 @@ import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.Listener;
  */
 public final class Bctrace {
 
-	static Bctrace instance;
+  private static final Logger LOGGER = createLogger();
 
-	private static final Logger LOGGER = createLogger();
+  private final InstrumentationImpl instrumentation;
+  private final Hook[] hooks;
+  private final Agent agent;
 
-	private final Transformer transformer;
-	private final InstrumentationImpl instrumentation;
-	private final Hook[] hooks;
+  public Bctrace(InstrumentationImpl instrumentation, Agent agent, boolean addDefaultHooks) {
+    this.agent = agent;
+    this.instrumentation = instrumentation;
+    if(addDefaultHooks){
+      this.hooks = addDefaultHooks(agent.getHooks());
+    } else {
+      this.hooks = agent.getHooks();
+    }
+  }
 
-	Bctrace(java.lang.instrument.Instrumentation javaInstrumentation, Hook[] hooks) {
-		this.instrumentation = new InstrumentationImpl(javaInstrumentation);
-		this.transformer = new Transformer();
-		this.hooks = hooks;
-	}
+  private static Hook[] addDefaultHooks(Hook[] hooks) {
+    Hook[] ret = new Hook[hooks.length + 1];
+    System.arraycopy(hooks, 0, ret, 0, hooks.length);
+    ret[ret.length - 1] = new CallCounterHook();
+    return ret;
+  }
 
-	void init() {
-		if (hooks != null) {
-			Listener[] listeners = new Listener[this.hooks.length];
-			for (int i = 0; i < hooks.length; i++) {
-				hooks[i].init(this.instrumentation);
-				listeners[i] = this.hooks[i].getListener();
-			}
-			Callback.listeners = listeners;
-		}
-		if (instrumentation != null) {
-			instrumentation.getJavaInstrumentation().addTransformer(transformer,
-					instrumentation.isRetransformClassesSupported());
-		}
-	}
+  public void init() {
+    if (agent != null) {
+      agent.init(this);
+      Object[] listeners = new Object[hooks.length];
+      for (int i = 0; i < hooks.length; i++) {
+        listeners[i] = this.hooks[i].getListener();
+      }
+      if (instrumentation != null && instrumentation.getJavaInstrumentation() != null) {
+        CallbackTransformer cbTransformer = new CallbackTransformer(hooks);
+        instrumentation.getJavaInstrumentation()
+            .addTransformer(cbTransformer, false);
+        Callback.listeners = listeners;
+        Callback.errorListener = new ErrorListener() {
+          @Override
+          public void onError(Throwable th) {
+            LOGGER.log(Level.ERROR, th.getMessage(), th);
+          }
+        };
+        Transformer transformer = new Transformer(this.instrumentation, this, cbTransformer);
+        instrumentation.getJavaInstrumentation().addTransformer(transformer, true);
+      }
+      disableThreadNotification();
+      agent.afterRegistration();
+      enableThreadNotification();
+    }
+  }
 
-	private static Logger createLogger() {
-		Logger logger = AgentLoggerFactory.getInstance().getLogger();
-		String logLevel = System.getProperty(SystemProperty.LOG_LEVEL);
-		if (logLevel != null) {
-			Level level = Level.parse(logLevel);
-			logger.setLevel(level);
-			Handler[] handlers = logger.getHandlers();
-			if (handlers != null) {
-				for (Handler handler : handlers) {
-					handler.setLevel(level);
-				}
-			}
-		}
-		return logger;
-	}
+  public void disableThreadNotification() {
+    CallbackEnabler.disableThreadNotification();
+  }
 
-	public static Bctrace getInstance() {
-		return instance;
-	}
+  public void enableThreadNotification() {
+    CallbackEnabler.enableThreadNotification();
+  }
 
-	public Instrumentation getInstrumentation() {
-		return this.instrumentation;
-	}
+  public void isThreadNotificationEnabled() {
+    CallbackEnabler.isThreadNotificationEnabled();
+  }
 
-	public static boolean isThreadNotificationEnabled() {
-		return Callback.isThreadNotificationEnabled();
-	}
+  public static URL getURL(Class<?> clazz) {
+    String resourceName = clazz.getName().replace('.', '/') + ".class";
+    ClassLoader cl = clazz.getClassLoader();
+    if (cl == null) {
+      return ClassLoader.getSystemResource(resourceName);
+    } else {
+      return cl.getResource(resourceName);
+    }
+  }
 
-	public static void enableThreadNotification() {
-		Callback.enableThreadNotification();
-	}
+  public static URL getURL(final String className, final ClassLoader cl) {
+    final String classResource = className.replace('.', '/') + ".class";
+    if (cl == null) {
+        return ClassLoader.getSystemResource(classResource);
+      } else {
+        return cl.getResource(classResource);
+      }
+    
+  }
 
-	public static void disableThreadNotification() {
-		Callback.disableThreadNotification();
-	}
+  private static Logger createLogger() {
+    Logger logger = AgentLoggerFactory.getInstance().getLogger();
+    String logLevel = System.getProperty(SystemProperty.LOG_LEVEL);
+    if (logLevel != null) {
+      Level level = Level.valueOf(logLevel);
+      logger.setLevel(level);
+    }
+    return logger;
+  }
 
-	public Hook[] getHooks() {
-		return this.hooks;
-	}
+  public Instrumentation getInstrumentation() {
+    return this.instrumentation;
+  }
 
-	public Logger getAgentLogger() {
-		return LOGGER;
-	}
+  public Hook[] getHooks() {
+    return this.hooks;
+  }
+
+  public static Logger getAgentLogger() {
+    return LOGGER;
+  }
 }

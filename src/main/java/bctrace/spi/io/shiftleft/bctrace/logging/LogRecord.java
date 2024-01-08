@@ -39,10 +39,7 @@ public class LogRecord {
 
     LogRecord logRecord = (LogRecord) o;
 
-    if (level != logRecord.level) {
-      return false;
-    }
-    if (message != null ? !message.equals(logRecord.message) : logRecord.message != null) {
+    if ((level != logRecord.level) || (message != null ? !message.equals(logRecord.message) : logRecord.message != null)) {
       return false;
     }
     return throwable != null ? throwable.equals(logRecord.throwable) : logRecord.throwable == null;

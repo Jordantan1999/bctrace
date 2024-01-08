@@ -12,7 +12,7 @@
  * Confidentiality and Non-disclosure agreements explicitly covering such access.
  *
  * The copyright notice above does not evidence any actual or intended publication or disclosure
- * of this source code, which includeas information that is confidential and/or proprietary, and
+ * of this source code, which includes information that is confidential and/or proprietary, and
  * is a trade secret, of ShiftLeft, Inc.
  *
  * ANY REPRODUCTION, MODIFICATION, DISTRIBUTION, PUBLIC PERFORMANCE, OR PUBLIC DISPLAY
@@ -24,115 +24,115 @@
  */
 package bctrace.runtime.io.shiftleft.bctrace.runtime;
 
-import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.Listener;
-import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.info.BeforeThrownListener;
-import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.info.FinishReturnListener;
-import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.info.FinishThrowableListener;
-import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.info.StartArgumentsListener;
-import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.info.StartListener;
-import bctrace.runtime.io.shiftleft.bctrace.runtime.listener.min.MinStartListener;
+
+import io.shiftleft.bctrace.runtime.listener.generic.GenericMethodMutableStartListener;
+import io.shiftleft.bctrace.runtime.listener.generic.GenericMethodReturnListener;
+import io.shiftleft.bctrace.runtime.listener.generic.GenericMethodStartListener;
+import io.shiftleft.bctrace.runtime.listener.generic.GenericMethodThrowableListener;
 
 /**
- *
  * @author Ignacio del Valle Alles idelvall@shiftleft.io
  */
 public final class Callback {
 
-	private static final ThreadLocal<Boolean> NOTIFY_DISABLED_FLAG = new ThreadLocal<>();
-	private static final ThreadLocal<Boolean> NOTIFYING_FLAG = new ThreadLocal<>();
+  public static Object[] listeners;
+  public static ErrorListener errorListener;
 
-	public static Listener[] listeners;
+  // Avoid notifications caused by listener methods code
+  private static final ThreadLocal<Boolean> NOTIFYING_FLAG = new ThreadLocal<>();
 
-	public static void onStart(int methodId, int i) {
-		if (!isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
-			return;
-		}
-		if (DebugInfo.isEnabled()) {
-			DebugInfo.getInstance().increaseCallCounter(methodId);
-		}
-		try {
-			NOTIFYING_FLAG.set(Boolean.TRUE);
-			((MinStartListener) listeners[i]).onStart(methodId);
-		} finally {
-			NOTIFYING_FLAG.remove();
-		}
-	}
+  public static void onStart(Object[] args, int methodId, Class<?> clazz, Object instance, int i) {
+    if (!CallbackEnabler.isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
+      return;
+    }
+    try {
+      NOTIFYING_FLAG.set(Boolean.TRUE);
+      ((GenericMethodStartListener) listeners[i]).onStart(methodId, clazz, instance, args);
+    } catch (Throwable th) {
+      handleThrowable(th);
+      return;
+    } finally {
+      NOTIFYING_FLAG.set(Boolean.FALSE);
+    }
+  }
 
-	public static void onStart(int methodId, Object instance, int i) {
-		if (!isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
-			return;
-		}
-		if (DebugInfo.isEnabled()) {
-			DebugInfo.getInstance().increaseCallCounter(methodId);
-		}
-		try {
-			NOTIFYING_FLAG.set(Boolean.TRUE);
-			((StartListener) listeners[i]).onStart(methodId, instance);
-		} finally {
-			NOTIFYING_FLAG.remove();
-		}
-	}
+  public static Object[] onMutableStart(Object[] args, int methodId, Class<?> clazz, Object instance,
+      int i) {
+    if (!CallbackEnabler.isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
+      return args;
+    }
+    try {
+      NOTIFYING_FLAG.set(Boolean.TRUE);
+      return ((GenericMethodMutableStartListener) listeners[i])
+          .onStart(methodId, clazz, instance, args);
+    } catch (Throwable th) {
+      handleThrowable(th);
+      return args;
+    } finally {
+      NOTIFYING_FLAG.set(Boolean.FALSE);
+    }
+  }
 
-	public static void onStart(Object[] args, int methodId, Object instance, int i) {
-		if (!isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
-			return;
-		}
-		if (DebugInfo.isEnabled()) {
-			DebugInfo.getInstance().increaseCallCounter(methodId);
-		}
-		try {
-			NOTIFYING_FLAG.set(Boolean.TRUE);
-			((StartArgumentsListener) listeners[i]).onStart(methodId, instance, args);
-		} finally {
-			NOTIFYING_FLAG.remove();
-		}
-	}
+  /**
+   * Callback method for FinishListener instances.
+   *
+   * @param ret The original value to be changed by the listener.
+   */
+  public static Object onReturn(Object ret, int methodId,
+      Class<?> clazz, Object instance, int i, Object[] args) {
+    if (!CallbackEnabler.isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
+      return ret;
+    }
+    try {
+      NOTIFYING_FLAG.set(Boolean.TRUE);
+      return ((GenericMethodReturnListener) listeners[i])
+          .onReturn(methodId, clazz, instance, args, ret);
+    } catch (Throwable thr) {
+      handleThrowable(thr);
+      // In case of exception raised in the listener, return the original value
+      return ret;
+    } finally {
+      NOTIFYING_FLAG.set(Boolean.FALSE);
+    }
+  }
 
-	public static void onFinishedReturn(Object ret, int methodId, Object instance, int i) {
-		if (!isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
-			return;
-		}
-		try {
-			NOTIFYING_FLAG.set(Boolean.TRUE);
-			((FinishReturnListener) listeners[i]).onFinishedReturn(methodId, instance, ret);
-		} finally {
-			NOTIFYING_FLAG.remove();
-		}
-	}
+  /**
+   * Callback method for FinishListener instances.
+   *
+   * @param th The original Throwable to be changed by the listener.
+   */
+  public static Throwable onThrow(Throwable th, int methodId,
+      Class<?> clazz, Object instance, int i, Object[] args) {
+    if (!CallbackEnabler.isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
+      return th;
+    }
+    try {
+      NOTIFYING_FLAG.set(Boolean.TRUE);
+      return ((GenericMethodThrowableListener) listeners[i])
+          .onThrow(methodId, clazz, instance, args, th);
+    } catch (Throwable thr) {
+      handleThrowable(thr);
+      // In case of exception raised in the listener, return the original value
+      return th;
+    } finally {
+      NOTIFYING_FLAG.set(Boolean.FALSE);
+    }
+  }
 
-	public static void onFinishedThrowable(Throwable th, int methodId, Object instance, int i) {
-		if (!isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
-			return;
-		}
-		try {
-			NOTIFYING_FLAG.set(Boolean.TRUE);
-			((FinishThrowableListener) listeners[i]).onFinishedThrowable(methodId, instance, th);
-		} finally {
-			NOTIFYING_FLAG.remove();
-		}
-	}
+  private static void handleThrowable(Throwable th) {
+    if (th instanceof BctraceRuntimeException) {
+      throw ((BctraceRuntimeException) th).getWrappedException();
+    } else {
+      if (errorListener != null) {
+        errorListener.onError(th);
+      } else {
+        th.printStackTrace();
+      }
+    }
+  }
 
-	public static void onBeforeThrown(Throwable th, int methodId, Object instance, int i) {
-		if (!isThreadNotificationEnabled() || (Boolean.TRUE == NOTIFYING_FLAG.get())) {
-			return;
-		}
-		try {
-			NOTIFYING_FLAG.set(Boolean.TRUE);
-			((BeforeThrownListener) listeners[i]).onBeforeThrown(methodId, instance, th);
-		} finally {
-			NOTIFYING_FLAG.remove();
-		}
-	}
+  public static interface ErrorListener {
 
-	public static boolean isThreadNotificationEnabled() {
-		return NOTIFY_DISABLED_FLAG.get() != Boolean.TRUE;
-	}
-
-	public static void enableThreadNotification() {
-		NOTIFY_DISABLED_FLAG.remove();
-	}
-
-	public static void disableThreadNotification() {
-		NOTIFY_DISABLED_FLAG.set(Boolean.TRUE);
-	}
+    public void onError(Throwable th);
+  }
 }

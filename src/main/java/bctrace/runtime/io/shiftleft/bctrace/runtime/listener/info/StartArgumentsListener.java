@@ -39,7 +39,7 @@ public interface StartArgumentsListener extends Listener {
    * @param methodId method id (as defined by MethodRegistry)
    * @param instance instance where the method belongs. Null if the method is
    * static
-   * @param args arguments passed to the method. 
+   * @param args arguments passed to the method.
    * returns false;
    */
   public void onStart(int methodId, Object instance, Object[] args);

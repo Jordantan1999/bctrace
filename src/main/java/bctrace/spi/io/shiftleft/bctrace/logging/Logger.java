@@ -6,7 +6,7 @@ import java.util.Set;
 
 public abstract class Logger {
 
-  private final Set<Logger> delegators = Collections.synchronizedSet(new HashSet());
+  private final Set<Logger> delegators = Collections.synchronizedSet(new HashSet<Logger>());
 
   protected Level level = Level.QUIET;
 

@@ -36,14 +36,14 @@ public interface FinishReturnListener extends Listener {
    * Invoked by instrumented methods just before return (if multiple plugins are
    * registered, listener notification is performed according to their
    * respective plugin <b>reverse</b> registration order).
-   * 
+   *
    * @param methodId method id (as defined by MethodRegistry)
    * @param instance instance where the method belongs. Null if the method is
    * @param ret Object being returned by the method. Wrapper type if the
    * original return type is primitive. <code>null</code> if the method return
    * type is <code>void</code>
    */
-  
+
   public void onFinishedReturn(int methodId, Object instance, Object ret);
 
 }

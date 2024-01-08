@@ -12,7 +12,7 @@
  * Confidentiality and Non-disclosure agreements explicitly covering such access.
  *
  * The copyright notice above does not evidence any actual or intended publication or disclosure
- * of this source code, which includeas information that is confidential and/or proprietary, and
+ * of this source code, which includes information that is confidential and/or proprietary, and
  * is a trade secret, of ShiftLeft, Inc.
  *
  * ANY REPRODUCTION, MODIFICATION, DISTRIBUTION, PUBLIC PERFORMANCE, OR PUBLIC DISPLAY
@@ -24,23 +24,40 @@
  */
 package bctrace.core.io.shiftleft.bctrace.asm.util;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import bctrace.core.org.objectweb.asm.Opcodes;
-import bctrace.core.org.objectweb.asm.Type;
-import bctrace.core.org.objectweb.asm.tree.AbstractInsnNode;
-import bctrace.core.org.objectweb.asm.tree.InsnNode;
-import bctrace.core.org.objectweb.asm.tree.IntInsnNode;
-import bctrace.core.org.objectweb.asm.tree.LdcInsnNode;
-import bctrace.core.org.objectweb.asm.tree.MethodInsnNode;
-import bctrace.core.org.objectweb.asm.tree.VarInsnNode;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Arrays;
+import java.util.List;
+
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.IntInsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.util.Printer;
+import org.objectweb.asm.util.Textifier;
+import org.objectweb.asm.util.TraceMethodVisitor;
 
 /**
- *
  * @author Ignacio del Valle Alles idelvall@shiftleft.io
  */
-public class ASMUtils {
+public final class ASMUtils {
+
+  private ASMUtils() {
+
+  }
+
+  public static boolean isInterface(int modifiers) {
+    return (modifiers & Opcodes.ACC_INTERFACE) != 0;
+  }
 
   public static boolean isAbstract(int modifiers) {
     return (modifiers & Opcodes.ACC_ABSTRACT) != 0;
@@ -100,15 +117,111 @@ public class ASMUtils {
         opCode = Opcodes.ILOAD;
         break;
       default:
-        throw new ClassFormatError("Invalid method signature: "
-                + type.getDescriptor());
+        throw new ClassFormatError("Invalid method signature: " + type.getDescriptor());
     }
     return new VarInsnNode(opCode, position);
   }
 
-  public static MethodInsnNode getWrapperContructionInst(Type type) {
+  public static Object[] getTopLocals(ClassNode cn, MethodNode mn) {
+    Type[] argumentTypes = Type.getArgumentTypes(mn.desc);
+    Object[] ret;
+    int offset;
+    if (!isStatic(mn.access)) {
+      offset = 1;
+      ret = new Object[argumentTypes.length + 1];
+      ret[0] = cn.name;
+    } else {
+      offset = 0;
+      ret = new Object[argumentTypes.length];
+    }
+    for (int i = 0; i < argumentTypes.length; i++) {
+      ret[i + offset] = getFrameType(argumentTypes[i]);
+    }
+    updateLocalsOfIncompleteFrames(mn, ret);
+    return ret;
+  }
 
-    char charType = type.getDescriptor().charAt(0);
+  /**
+   * Updates existent full frames that have only a subset of the top locals. Otherwise, adding a
+   * frame on top of them with the whole top locals will make verification fail
+   */
+  private static void updateLocalsOfIncompleteFrames(MethodNode mn, Object[] topLocals) {
+    InsnList il = mn.instructions;
+    for (AbstractInsnNode node : il) {
+      if (node instanceof FrameNode) {
+        FrameNode fn = (FrameNode) node;
+        if ((fn.type == Opcodes.F_FULL || fn.type == Opcodes.F_NEW) &&
+            (fn.local == null || fn.local.size() < topLocals.length)) {
+          fn.local = Arrays.asList(topLocals);
+        }
+      }
+    }
+  }
+
+  private static Object getFrameType(Type type) {
+    switch (type.getDescriptor().charAt(0)) {
+      case 'I':
+      case 'B':
+      case 'C':
+      case 'Z':
+      case 'S':
+        return Opcodes.INTEGER;
+      case 'D':
+        return Opcodes.DOUBLE;
+      case 'F':
+        return Opcodes.FLOAT;
+      case 'J':
+        return Opcodes.LONG;
+      default:
+        return type.getInternalName();
+    }
+  }
+
+  public static InsnNode getReturnInst(Type type) {
+    int opCode = -1;
+    switch (type.getDescriptor().charAt(0)) {
+      case 'B':
+        opCode = Opcodes.IRETURN;
+        break;
+      case 'C':
+        opCode = Opcodes.IRETURN;
+        break;
+      case 'D':
+        opCode = Opcodes.DRETURN;
+        break;
+      case 'F':
+        opCode = Opcodes.FRETURN;
+        break;
+      case 'I':
+        opCode = Opcodes.IRETURN;
+        break;
+      case 'J':
+        opCode = Opcodes.LRETURN;
+        break;
+      case 'L':
+        opCode = Opcodes.ARETURN;
+        break;
+      case '[':
+        opCode = Opcodes.ARETURN;
+        break;
+      case 'Z':
+        opCode = Opcodes.IRETURN;
+        break;
+      case 'S':
+        opCode = Opcodes.IRETURN;
+        break;
+      default:
+        throw new ClassFormatError("Invalid return type: " + type.getDescriptor());
+    }
+    return new InsnNode(opCode);
+  }
+
+  public static String getWrapper(Type primitiveType) {
+
+    if (primitiveType.getDescriptor().length() != 1) {
+      return null;
+    }
+    char charType = primitiveType.getDescriptor().charAt(0);
     String wrapper;
     switch (charType) {
       case 'B':
@@ -140,12 +253,63 @@ public class ASMUtils {
         wrapper = "java/lang/Short";
         break;
       default:
-        throw new ClassFormatError("Invalid method signature: "
-                + type.getDescriptor());
+        throw new ClassFormatError("Invalid type descriptor: "
+            + primitiveType.getDescriptor());
     }
+    return wrapper;
+  }
 
+  public static String getPrimitiveMethodName(String wrapper) {
+
+    if (wrapper == null) {
+      return null;
+    }
+    if (wrapper.equals("java/lang/Byte")) {
+      return "byteValue";
+    }
+    if (wrapper.equals("java/lang/Character")) {
+      return "charValue";
+    }
+    if (wrapper.equals("java/lang/Double")) {
+      return "doubleValue";
+    }
+    if (wrapper.equals("java/lang/Float")) {
+      return "floatValue";
+    }
+    if (wrapper.equals("java/lang/Integer")) {
+      return "intValue";
+    }
+    if (wrapper.equals("java/lang/Long")) {
+      return "longValue";
+    }
+    if (wrapper.equals("java/lang/Boolean")) {
+      return "booleanValue";
+    }
+    if (wrapper.equals("java/lang/Short")) {
+      return "shortValue";
+    }
+    throw new ClassFormatError("Invalid wrapper type: " + wrapper);
+  }
+
+  public static MethodInsnNode getPrimitiveToWrapperInst(Type type) {
+
+    String wrapper = getWrapper(type);
+    if (wrapper == null) {
+      return null;
+    }
     return new MethodInsnNode(Opcodes.INVOKESTATIC, wrapper, "valueOf",
-            "(" + charType + ")L" + wrapper + ";", false);
+        "(" + type.getDescriptor() + ")L" + wrapper + ";", false);
+
+  }
+
+  public static MethodInsnNode getWrapperToPrimitiveInst(Type primitiveType) {
+
+    String wrapper = getWrapper(primitiveType);
+    if (wrapper == null) {
+      return null;
+    }
+    return new MethodInsnNode(Opcodes.INVOKEVIRTUAL, wrapper, getPrimitiveMethodName(wrapper),
+        "()" + primitiveType.getDescriptor(), false);
 
   }
 
@@ -184,7 +348,7 @@ public class ASMUtils {
         break;
       default:
         throw new ClassFormatError("Invalid method signature: "
-                + type.getDescriptor());
+            + type.getDescriptor());
     }
     return new VarInsnNode(opCode, position);
   }
@@ -214,16 +378,32 @@ public class ASMUtils {
     }
   }
 
-  public static byte[] toByteArray(InputStream is) throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    byte[] buffer = new byte[1024];
-    while (true) {
-      int r = is.read(buffer);
-      if (r == -1) {
-        break;
+  public static void viewByteCode(byte[] bytecode) {
+    ClassReader cr = new ClassReader(bytecode);
+    ClassNode cn = new ClassNode();
+    cr.accept(cn, 0);
+    final List<MethodNode> mns = cn.methods;
+    Printer printer = new Textifier();
+    TraceMethodVisitor mp = new TraceMethodVisitor(printer);
+    for (MethodNode mn : mns) {
+      InsnList inList = mn.instructions;
+      System.out.println(mn.name);
+      for (int i = 0; i < inList.size(); i++) {
+        inList.get(i).accept(mp);
+        StringWriter sw = new StringWriter();
+        printer.print(new PrintWriter(sw));
+        printer.getText().clear();
+        System.out.print(sw.toString());
       }
-      out.write(buffer, 0, r);
     }
-    return out.toByteArray();
+  }
+
+  public static void main(String[] args) {
+    int mod = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE;
+    mod = mod & ~Opcodes.ACC_PRIVATE;
+    System.err.println(isPublic(mod));
+    System.err.println(isStatic(mod));
+    System.err.println(isProtected(mod));
+    System.err.println(isPrivate(mod));
   }
 }

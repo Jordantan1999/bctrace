@@ -12,7 +12,7 @@
  * Confidentiality and Non-disclosure agreements explicitly covering such access.
  *
  * The copyright notice above does not evidence any actual or intended publication or disclosure
- * of this source code, which includeas information that is confidential and/or proprietary, and
+ * of this source code, which includes information that is confidential and/or proprietary, and
  * is a trade secret, of ShiftLeft, Inc.
  *
  * ANY REPRODUCTION, MODIFICATION, DISTRIBUTION, PUBLIC PERFORMANCE, OR PUBLIC DISPLAY
@@ -26,13 +26,13 @@ package bctrace.core.io.shiftleft.bctrace;
 
 import java.io.IOException;
 import java.lang.instrument.Instrumentation;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.Scanner;
+import java.util.Set;
 
-import bctrace.core.io.shiftleft.bctrace.debug.DebugHttpServer;
-import bctrace.core.io.shiftleft.bctrace.spi.Hook;
+import bctrace.core.io.shiftleft.bctrace.asm.DirectListenerTransformer;
+import bctrace.runtime.io.shiftleft.bctrace.runtime.CallbackEnabler;
 
 /**
  * Framework entry point.
@@ -41,50 +41,88 @@ import bctrace.core.io.shiftleft.bctrace.spi.Hook;
  */
 public class Init {
 
-	private static final String DESCRIPTOR_NAME = ".bctrace";
+  private static final String OSGI_PACKAGE_DELEGATION_PROP = "org.osgi.framework.bootdelegation";
+  private static final String OSGI_PACKAGE_DELEGATION_VALUE = "io.shiftleft.*";
+  private static final String DESCRIPTOR_NAME = ".bctrace";
 
-	public static void premain(final String arg, Instrumentation inst) throws Exception {
-		bootstrap(arg, inst);
-	}
+  public static void premain(String arg, Instrumentation inst) {
+    bootstrap(arg, inst);
+  }
 
-	public static void agentmain(String arg, Instrumentation inst) throws Exception {
-		bootstrap(arg, inst);
-	}
+  public static void agentmain(String arg, Instrumentation inst) {
+    bootstrap(arg, inst);
+  }
 
-	private static void bootstrap(String agentArgs, Instrumentation inst) throws Exception {
-		if (Bctrace.instance != null) {
-			throw new IllegalStateException("Bctrace has been already loaded");
-		}
-		String[] hookClassNames = readHookClassNamesFromDescriptors();
-		if (hookClassNames == null || hookClassNames.length == 0) {
-			throw new Error("No hooks found in classpath resource " + DESCRIPTOR_NAME);
-		}
-		Hook[] hooks = new Hook[hookClassNames.length];
-		for (int i = 0; i < hooks.length; i++) {
-			hooks[i] = (Hook) Class.forName(hookClassNames[i]).newInstance();
-		}
-		Bctrace.instance = new Bctrace(inst, hooks);
-		Bctrace.instance.init();
-		DebugHttpServer.init();
-	}
+  public static void main(String args[]) {
+    try {
+      AgentFactory factory = createAgentFactory();
+      String help = factory.createHelp().getHelp();
+      System.err.println(help);
+    } catch (Throwable th) {
+      th.printStackTrace(System.err);
+      System.exit(1);
+    }
+  }
 
-	private static String[] readHookClassNamesFromDescriptors() throws IOException {
-		ClassLoader cl = Init.class.getClassLoader();
-		if (cl == null) {
-			cl = ClassLoader.getSystemClassLoader().getParent();
+  private static void bootstrap(String agentArgs, Instrumentation inst) {
+    try {
+      CallbackEnabler.disableThreadNotification();
+      wrapSystemProperties();
+      InstrumentationImpl instrumentation = new InstrumentationImpl(inst);
+      DirectListenerTransformer directListenerTransformer = new DirectListenerTransformer(
+          instrumentation);
+      inst.addTransformer(directListenerTransformer, false);
+      AgentFactory factory = createAgentFactory();
+      Agent agent = factory.createAgent();
+      Bctrace bctrace = new Bctrace(instrumentation, agent, true);
+      bctrace.init();
+      CallbackEnabler.enableThreadNotification();
+    } catch (Throwable th) {
+      th.printStackTrace(System.err);
+      System.exit(1);
+    }
+  }
+
+  public static AgentFactory createAgentFactory() throws Exception {
+    String factoryImpClass = readAgentFactoryImpClass();
+    if (factoryImpClass == null) {
+      throw new Error("No agent factory found in classpath resource " + DESCRIPTOR_NAME);
+    }
+    return (AgentFactory) Class.forName(factoryImpClass).getDeclaredConstructor().newInstance();
+  }
+
+  private static void wrapSystemProperties() {
+    Properties initialProperties = System.getProperties();
+    System.setProperties(new Properties() {
+      /**
+		 * 
+		 */
+		private static final long serialVersionUID = 4451897935926427972L;
+
+	@Override
+      public synchronized Object put(Object key, Object value) {
+        if (key.equals(OSGI_PACKAGE_DELEGATION_PROP)) {
+          value = value + "," + OSGI_PACKAGE_DELEGATION_VALUE;
+        }
+        return super.put(key, value);
+      }
+    });
+    Set<Entry<Object, Object>> entries = initialProperties.entrySet();
+    for (Entry<?, ?> entry : entries) {
+      System.setProperty((String) (entry.getKey()), (String) (entry.getValue()));
+    }
+  }
+
+  private static String readAgentFactoryImpClass() throws IOException {
+    ClassLoader cl = Init.class.getClassLoader();
+    if (cl == null) {
+      cl = ClassLoader.getSystemClassLoader().getParent();
+    }
+    try (Scanner scanner = new Scanner(cl.getResourceAsStream(DESCRIPTOR_NAME))) {
+		if (scanner.hasNextLine()) {
+		  return scanner.nextLine().trim();
 		}
-		Enumeration<URL> resources = cl.getResources(DESCRIPTOR_NAME);
-		ArrayList<String> list = new ArrayList<>();
-		while (resources.hasMoreElements()) {
-			URL url = resources.nextElement();
-			Scanner scanner = new Scanner(url.openStream());
-			while (scanner.hasNextLine()) {
-				String line = scanner.nextLine().trim();
-				if (!line.isEmpty()) {
-					list.add(line);
-				}
-			}
-		}
-		return list.toArray(new String[list.size()]);
 	}
+    return null;
+  }
 }

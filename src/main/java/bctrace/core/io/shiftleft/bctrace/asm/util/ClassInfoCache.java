@@ -24,9 +24,10 @@
  */
 package bctrace.core.io.shiftleft.bctrace.asm.util;
 
-import bctrace.core.io.shiftleft.bctrace.spi.HierarchyClassInfo;
 import java.util.HashMap;
 import java.util.Map;
+
+import bctrace.core.io.shiftleft.bctrace.spi.HierarchyClassInfo;
 
 /**
  *
@@ -36,8 +37,8 @@ public class ClassInfoCache {
 
   private static final ClassInfoCache INSTANCE = new ClassInfoCache();
 
-  private final Map<ClassLoader, Map<String, HierarchyClassInfo>> maps = new HashMap<ClassLoader, Map<String, HierarchyClassInfo>>();
-  private final Map<String, HierarchyClassInfo> bootstrapMap = new HashMap<String, HierarchyClassInfo>();
+  private final Map<ClassLoader, Map<String, HierarchyClassInfo>> maps = new HashMap<>();
+  private final Map<String, HierarchyClassInfo> bootstrapMap = new HashMap<>();
 
   private ClassInfoCache() {
   }
@@ -53,7 +54,7 @@ public class ClassInfoCache {
     } else {
       map = maps.get(cl);
       if (map == null) {
-        map = new HashMap<String, HierarchyClassInfo>();
+        map = new HashMap<>();
         maps.put(cl, map);
       }
     }

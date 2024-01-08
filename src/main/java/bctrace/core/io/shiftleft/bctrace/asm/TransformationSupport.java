@@ -12,7 +12,7 @@
  * Confidentiality and Non-disclosure agreements explicitly covering such access.
  *
  * The copyright notice above does not evidence any actual or intended publication or disclosure
- * of this source code, which includeas information that is confidential and/or proprietary, and
+ * of this source code, which includes information that is confidential and/or proprietary, and
  * is a trade secret, of ShiftLeft, Inc.
  *
  * ANY REPRODUCTION, MODIFICATION, DISTRIBUTION, PUBLIC PERFORMANCE, OR PUBLIC DISPLAY
@@ -24,52 +24,102 @@
  */
 package bctrace.core.io.shiftleft.bctrace.asm;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.net.URL;
+import java.util.Enumeration;
+import java.util.LinkedList;
+import java.util.Scanner;
+
 import bctrace.core.io.shiftleft.bctrace.Bctrace;
+import bctrace.core.io.shiftleft.bctrace.Init;
+import bctrace.spi.io.shiftleft.bctrace.SystemProperty;
 
 /**
- *
  * @author Ignacio del Valle Alles idelvall@shiftleft.io
  */
 public class TransformationSupport {
 
-  private static final String[] CLASSNAME_PREFIX_IGNORE_LIST = new String[]{
-    "io/shiftleft/bctrace/",
-    "java/lang/Object",
-    "java/lang/String",
-    "java/lang/ThreadLocal",
-    "java/lang/VerifyError",
-    "java/lang/instrument",
-    "java/lang/invoke",
-    "java/lang/ref",
-    "java/lang/concurrent",
-    "java/security/",
-    "java/io/ByteArrayInputStream",
-    "sun/",
-    "com/sun/",
-    "javafx/",
-    "oracle/"
-  };
+  private static final String IGNORE_LIST_DESCRIPTOR_NAME = "bctrace.ignore";
+  private static final String[] CLASSNAME_PREFIX_IGNORE_LIST = readIgnoreClassNamesFromDescriptors();
+
+
+  private static String[] readIgnoreClassNamesFromDescriptors() {
+    try {
+      ClassLoader cl = Init.class.getClassLoader();
+      if (cl == null) {
+        cl = ClassLoader.getSystemClassLoader().getParent();
+      }
+      Enumeration<URL> resources = cl.getResources(IGNORE_LIST_DESCRIPTOR_NAME);
+      LinkedList<String> list = new LinkedList<>();
+      while (resources.hasMoreElements()) {
+        URL url = resources.nextElement();
+        Scanner scanner = new Scanner(url.openStream());
+        while (scanner.hasNextLine()) {
+          String line = scanner.nextLine().trim();
+          if (!line.isEmpty()) {
+            if (line.charAt(0) == '#') {
+              continue;
+            } else if (line.charAt(0) == '+') {
+              list.addFirst(line);
+            } else {
+              list.add(line);
+            }
+          }
+        }
+      }
+      if (System.getProperty(SystemProperty.IGNORE_FILE) != null) {
+        Scanner scanner = new Scanner(
+            new FileInputStream(System.getProperty(SystemProperty.IGNORE_FILE)));
+        while (scanner.hasNextLine()) {
+          String line = scanner.nextLine().trim();
+          if (!line.isEmpty()) {
+            if (line.charAt(0) == '#') {
+              continue;
+            } else if (line.charAt(0) == '+') {
+              list.addFirst(line);
+            } else {
+              list.add(line);
+            }
+          }
+        }
+      }
+      return list.toArray(new String[list.size()]);
+    } catch (IOException ex) {
+      throw new RuntimeException(ex);
+    }
+  }
 
   public static boolean isTransformable(String jvmClassName, ClassLoader loader) {
-
-    if (jvmClassName == null) {
+    if ((jvmClassName == null) || jvmClassName.contains("$$Lambda$")) {
       return false;
     }
-    if (jvmClassName.contains("$$Lambda$")) {
-      return false;
-    }
-    for (String prefix : CLASSNAME_PREFIX_IGNORE_LIST) {
-      if (jvmClassName.startsWith(prefix)) {
-        return false;
+    if (CLASSNAME_PREFIX_IGNORE_LIST != null) {
+      for (String prefix : CLASSNAME_PREFIX_IGNORE_LIST) {
+        if (prefix.charAt(0) == '+') {
+          if (jvmClassName.startsWith(prefix.substring(1))) {
+            break;
+          }
+        } else {
+          if (jvmClassName.startsWith(prefix)) {
+            return false;
+          }
+        }
       }
     }
     if (loader != null && loader == Bctrace.class.getClassLoader()) {
       return false;
     }
+    if (jvmClassName.equals(Transformer.CALL_BACK_ENABLED_CLASS_NAME)) {
+      return false;
+    }
+    if (jvmClassName.equals(Transformer.CALL_BACK_CLASS_NAME)) {
+      return false;
+    }
     return true;
   }
 
-  public static boolean isRetransformable(Class<?> clazz) {
+  public static boolean isRetransformable(Class clazz) {
     if (clazz.isInterface() || clazz.isPrimitive() || clazz.isArray()) {
       return false;
     }

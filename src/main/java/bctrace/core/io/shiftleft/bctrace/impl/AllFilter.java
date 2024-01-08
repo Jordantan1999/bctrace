@@ -24,10 +24,12 @@
  */
 package bctrace.core.io.shiftleft.bctrace.impl;
 
-import bctrace.core.io.shiftleft.bctrace.spi.HierarchyClassInfo;
-import bctrace.core.io.shiftleft.bctrace.spi.Filter;
 import java.security.ProtectionDomain;
-import bctrace.core.org.objectweb.asm.tree.MethodNode;
+
+import org.objectweb.asm.tree.MethodNode;
+
+import bctrace.core.io.shiftleft.bctrace.spi.Filter;
+import bctrace.core.io.shiftleft.bctrace.spi.HierarchyClassInfo;
 
 /**
  * A filter that accepts all classes and methods.

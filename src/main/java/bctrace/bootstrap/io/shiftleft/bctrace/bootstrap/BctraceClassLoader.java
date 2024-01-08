@@ -1,12 +1,10 @@
 package bctrace.bootstrap.io.shiftleft.bctrace.bootstrap;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLStreamHandler;
 import java.nio.ByteBuffer;
 import java.security.AllPermission;
 import java.security.CodeSource;
@@ -34,10 +32,7 @@ import java.util.zip.ZipInputStream;
  */
 public class BctraceClassLoader extends ClassLoader {
 
-  private static final String URL_PROTOCOL = "bctrace-agent";
-
-  private final URLStreamHandler handler = new AgentURLStreamHandler();
-  private final Map<String, Map<URL, ByteBuffer>> resourceMap = new HashMap<String, Map<URL, ByteBuffer>>();
+  private final Map<String, Map<URL, ByteBuffer>> resourceMap = new HashMap<>();
 
   private final ProtectionDomain agentProtectionDomain;
 
@@ -47,7 +42,7 @@ public class BctraceClassLoader extends ClassLoader {
       Permissions permissions = new Permissions();
       permissions.add(new AllPermission());
       this.agentProtectionDomain = new ProtectionDomain(new CodeSource(
-          new URL(URL_PROTOCOL, null, -1, agentJarName, handler),
+          new URI(agentJarName).toURL(),
           (Certificate[]) null),
           permissions,
           this,
@@ -65,7 +60,7 @@ public class BctraceClassLoader extends ClassLoader {
         ZipEntry zipEntry;
         while ((zipEntry = zis.getNextEntry()) != null) {
           String name = zipEntry.getName();
-          URL entryURL = new URL(URL_PROTOCOL, null, -1, jar + "!" + name, handler);
+          URL entryURL = new URI(jar + "!" + name).toURL();
           if (name.endsWith("/")) {
             if (!name.startsWith("META-INF/")) {
               try {
@@ -82,7 +77,7 @@ public class BctraceClassLoader extends ClassLoader {
             byte[] bytes = read(zis);
             Map<URL, ByteBuffer> entryMap = resourceMap.get(name);
             if (entryMap == null) {
-              entryMap = new HashMap<URL, ByteBuffer>();
+              entryMap = new HashMap<>();
               resourceMap.put(name, entryMap);
             }
             ByteBuffer byteBuffer = ByteBuffer.allocateDirect(bytes.length);
@@ -162,7 +157,7 @@ public class BctraceClassLoader extends ClassLoader {
 
   @Override
   protected Package getPackage(String name) {
-    return super.getPackage(getNormalizedPackageName(name));
+    return super.getDefinedPackage(getNormalizedPackageName(name));
   }
 
 
@@ -239,56 +234,5 @@ public class BctraceClassLoader extends ClassLoader {
     }
     buffer.flush();
     return buffer.toByteArray();
-  }
-
-  private class AgentURLConnection extends URLConnection {
-
-    protected AgentURLConnection(URL url) {
-      super(url);
-    }
-
-    @Override
-    public void connect() throws IOException {
-    }
-
-    @Override
-    public InputStream getInputStream() throws IOException {
-      String name = url.getFile().substring(url.getFile().lastIndexOf("!") + 1);
-      Map<URL, ByteBuffer> entryMap = resourceMap.get(name);
-      if (entryMap == null) {
-        return null;
-      }
-      ByteBuffer byteBuffer = entryMap.get(url);
-      if (byteBuffer == null) {
-        return null;
-      }
-      byte[] bytes = new byte[byteBuffer.limit()];
-      synchronized (byteBuffer) {
-        byteBuffer.position(0);
-        byteBuffer.get(bytes);
-      }
-      return new ByteArrayInputStream(bytes);
-    }
-  }
-
-  private class AgentURLStreamHandler extends URLStreamHandler {
-
-    @Override
-    protected URLConnection openConnection(URL url) throws IOException {
-      return new AgentURLConnection(url);
-    }
-  }
-
-  private static byte[] toByteArray(InputStream is) throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    byte[] buffer = new byte[1024];
-    while (true) {
-      int r = is.read(buffer);
-      if (r == -1) {
-        break;
-      }
-      out.write(buffer, 0, r);
-    }
-    return out.toByteArray();
   }
 }
